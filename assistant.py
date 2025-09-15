@@ -2,87 +2,81 @@ import speech_recognition as sr
 import os
 import webbrowser
 import openai
-from openai import OpenAI
 from config import apikey
 import datetime
 import random
-import numpy as np
 import pyttsx3
 import pywhatkit as kt
 
+# Initialize chat history
 chatStr = ""
+
+# Text-to-Speech
+def say(audio):
+    engine = pyttsx3.init()
+    voices = engine.getProperty('voices')
+    engine.setProperty('voice', voices[0].id)  # [0] for male, [1] for female
+    engine.say(audio)
+    engine.runAndWait()
+
+# Chat with GPT
 def chat(query):
     global chatStr
-    print(chatStr)
-    # openai.api_key = apikey
-    chatStr += f"Nalin: {query}\n Jarvis: "
-    client = OpenAI(api_key = apikey)
-    response = client.completions.create(
-        model="text-davinci-003",
-        prompt= chatStr,
-        temperature=0.7,
-        max_tokens=256,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    # todo: Wrap this inside of a  try catch block
-    say(response.choices[0].text)
-    chatStr += f"{response.choices[0].text}\n"
-    return response.choices[0].text
+    chatStr += f"Nalin: {query}\nJarvis: "
+    try:
+        openai.api_key = apikey
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=chatStr,
+            temperature=0.7,
+            max_tokens=256,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
+        reply = response.choices[0].text.strip()
+        say(reply)
+        chatStr += f"{reply}\n"
+        return reply
+    except Exception as e:
+        say("There was an error connecting to OpenAI.")
+        print("OpenAI Error:", e)
 
-
-def say(audio):
-	
-	engine = pyttsx3.init()
-	# getter method(gets the current value
-	# of engine property)
-	voices = engine.getProperty('voices')
-	
-	# setter method .[0]=male voice and 
-	# [1]=female voice in set Property.
-	engine.setProperty('voice', voices[0].id)
-	
-	# Method for the speaking of the assistant
-	engine.say(audio) 
-	
-	# Blocks while processing all the currently
-	# queued commands
-	engine.runAndWait()
-
-
-
-
+# One-time AI prompt handler
 def ai(prompt):
     openai.api_key = apikey
-    text = f"OpenAI response for Prompt: {prompt} \n *************************\n\n"
-    client = OpenAI(api_key = apikey)
-    response = client.completions.create(
-        model="text-davinci-003",
-        prompt=prompt,
-        temperature=0.7,
-        max_tokens=256,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    # todo: Wrap this inside of a  try catch block
-    # print(response["choices"][0]["text"])
-    text += response.choices[0].text
-    if not os.path.exists("Openai"):
-        os.mkdir("Openai")
+    text = f"OpenAI response for Prompt: {prompt}\n\n"
+    try:
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=prompt,
+            temperature=0.7,
+            max_tokens=256,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
+        reply = response.choices[0].text.strip()
+        text += reply
 
-    # with open(f"Openai/prompt- {random.randint(1, 2343434356)}", "w") as f:
-    with open(f"Openai/{''.join(prompt.split('intelligence')[1:]).strip() }.txt", "w") as f:
-        f.write(text)
+        if not os.path.exists("Openai"):
+            os.mkdir("Openai")
 
-# def say(text):
-#     os.system(f'say "{text}"')
+        # Safe filename using first 5 words
+        filename = "_".join(prompt.split()[:5]) + ".txt"
+        with open(f"Openai/{filename}", "w") as f:
+            f.write(text)
 
+        say("The result has been saved.")
+    except Exception as e:
+        say("Failed to generate AI response.")
+        print("AI Error:", e)
+
+# Voice recognition
 def takeCommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        # r.pause_threshold =  0.6
+        print("Listening...")
         audio = r.listen(source)
         try:
             print("Recognizing...")
@@ -90,62 +84,65 @@ def takeCommand():
             print(f"User said: {query}")
             return query
         except Exception as e:
-            return "Some Error Occurred. Sorry from Jarvis"
+            print("Recognition Error:", e)
+            say("Sorry, I didn't catch that.")
+            return None
 
+# Main Program
 if __name__ == '__main__':
-    print('Welcome to Jarvis A.I')
-    say("Good morning sir!")
-    while True:
-        print("Listening...")
-        query = takeCommand()
-        # todo: Add more sites
-        sites = [["youtube", "https://www.youtube.com"], ["wikipedia", "https://www.wikipedia.com"], ["google", "https://www.google.com"],]
-        web = query.replace("open","")
-        web = query.replace("on browser","")
-        website = "open"+web+"on browser"
-        if website.lower() in  query.lower():
-            try:
-                kt.search(web)
-            except:
-                say("Due to some network error i am not able to perform that task")
-        # todo: Add a feature to play a specific song
-        # if "open music" in query:
-        #     musicPath = "C:\Users\Asus\Videos\Dynamite.mp3"
-        #     os.system(f"open {musicPath}")
+    say("Good morning, Sir.")
+    print("Welcome to Jarvis A.I")
 
-        if "the time" in query:
-            musicPath = "/Users/harry/Downloads/downfall-21371.mp3"
-            hour = datetime.datetime.now().strftime("%H")
-            min = datetime.datetime.now().strftime("%M")
-            say(f"Sir time is {hour} bajke {min} minutes")
+    try:
+        while True:
+            query = takeCommand()
+            if not query:
+                continue
+            query = query.lower()
 
-       
+            # Handle website opening
+            if "open" in query and "on browser" in query:
+                site_name = query.replace("open", "").replace("on browser", "").strip()
+                say(f"Opening {site_name} on your browser.")
+                try:
+                    kt.search(site_name)
+                except:
+                    say("Sorry, I couldn't connect to the internet.")
 
-        # elif "open pass".lower() in query.lower():
-        #     os.system(f"open /Applications/Passky.app")
+            # Play on YouTube
+            elif "play" in query and "on youtube" in query:
+                song = query.replace("play", "").replace("on youtube", "").strip()
+                say(f"Playing {song} on YouTube.")
+                try:
+                    kt.playonyt(song)
+                except:
+                    say("Unable to play due to a network issue.")
 
-        elif "Using artificial intelligence".lower() in query.lower():
-            ai(prompt=query)
+            # Tell the time
+            elif "the time" in query:
+                now = datetime.datetime.now()
+                hour = now.strftime("%H")
+                minute = now.strftime("%M")
+                say(f"Sir, the time is {hour} hours and {minute} minutes.")
 
-        elif "Jarvis exit".lower() in query.lower():
-            exit()
+            # Run one-time AI prompt
+            elif "using artificial intelligence" in query:
+                ai(prompt=query)
 
-        elif "reset chat".lower() in query.lower():
-            chatStr = ""
-        if "on youtube".lower() in query.lower() :
-            try:
-                song = query.replace("on youtube","")
-                song = song.replace("play","")
-                say("playing"+song+"on youtube ")
-                kt.playonyt(song)
-            except:
-                say("Due to some network error i am not able to perform that task")
-        else:
-            print("Chatting...")
-            chat(query)
+            # Exit
+            elif "jarvis exit" in query or "exit" in query:
+                say("Goodbye, sir.")
+                break
 
+            # Reset chat history
+            elif "reset chat" in query:
+                chatStr = ""
+                say("Chat history has been reset.")
 
+            # Otherwise, use GPT chat
+            else:
+                print("Chatting...")
+                chat(query)
 
-
-
-        # say(query)
+    except KeyboardInterrupt:
+        say("Shutting down. Goodbye!")
